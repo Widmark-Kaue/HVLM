@@ -46,3 +46,5 @@ plt.show(block = False)
 # ax.plot(X, Y, Z, 'k')
 # plt.axis('equal')
 # plt.show(block = False)
+
+# %%
