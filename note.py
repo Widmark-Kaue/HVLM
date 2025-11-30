@@ -114,9 +114,9 @@ def grid(Nchord, Nspan, B, X, SN1, CS1, CH, QF=None, QC=None, DS=None, DXW=None)
     AR = 2.0 * B * B / S
 
     return QF, QC, DS, S, C, AR, DXW
-Uso rápido (exemplo)
-python
-Copiar código
+# Uso rápido (exemplo)
+# python
+# Copiar código
 import numpy as np
 IB = 4
 JB = 13
