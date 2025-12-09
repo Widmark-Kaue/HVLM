@@ -22,22 +22,22 @@ vlm.plot_mesh(X, Y, Z, vcp)
 
 
 # %% asa enflechada
-span = 4.0
-c_root = 1
-taper_ratio = 0.1
-N = 20
+# span = 4.0
+# c_root = 1
+# taper_ratio = 0.1
+# N = 20
 
-y = np.linspace(0, span/2, N)
-chord = c_root * (1 - (1 - taper_ratio) * y/span)
-sweep_deg = 30
-sweep = np.tan(np.radians(sweep_deg))
+# y = np.linspace(0, span/2, N)
+# chord = c_root * (1 - (1 - taper_ratio) * y/span)
+# sweep_deg = 30
+# sweep = np.tan(np.radians(sweep_deg))
 
-x_le = sweep * y
+# x_le = sweep * y
 
 
-geometry = np.column_stack([x_le, y, chord])
+# geometry = np.column_stack([x_le, y, chord])
 
-X, Y, Z, panels = vlm.meshPlanar(10, 10, geometry)
+# X, Y, Z, panels = vlm.meshPlanar(10, 10, geometry)
 
 # vlm.plot_mesh(X, Y, Z)
 # %%
