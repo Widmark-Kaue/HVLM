@@ -1,8 +1,17 @@
 import numpy as np
-from scipy.linalg import solve
+# from scipy.linalg import solve
 import matplotlib.pyplot as plt
 
-def plot_mesh(X, Y, Z, vcp, normals):
+def plot_mesh(mesh:dict):
+    
+    X = mesh['X']
+    Y = mesh['Y']
+    Z = mesh['Z']
+    
+    normals = mesh['normals']
+    vcp = mesh['vcp']
+    
+    
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -57,6 +66,7 @@ def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
     n_panels = nchord * nspan
     panels_id = np.arange(n_panels).reshape(nchord, nspan)
     panels = np.zeros((n_panels, 4, 3))
+    panels_span = np.zeros((n_panels, 1))
     normals = np.zeros((n_panels, 3))
     area = np.zeros((n_panels,1))
     
@@ -80,11 +90,20 @@ def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
             area[k] = np.linalg.norm(normal)
             normal_unit = normal/area[k]
             normals[k, :] = normal_unit
+            panels_span[k] = P4[1] - P1[1] # talvez não seja o suficiente para asas enflechadas
             
-            
-            
+    vcp = vortexAndControlPoint(panels)
+    MESH = dict(
+        X = X, Y = Y, Z = Z,
+        panels = panels, 
+        panels_span = panels_span,
+        panels_id = panels_id,
+        normals = normals,
+        area = area,
+        vcp = vcp
+    )     
 
-    return X, Y, Z, panels, panels_id, normals, area
+    return MESH
 
 def vortexAndControlPoint(panels:np.ndarray):
     
@@ -147,7 +166,7 @@ def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:flo
     r1xr2 = np.cross(r1, r2)
     r1xr2_norm_square = np.linalg.norm(r1xr2)**2
     
-    assert r1xr2_norm_square > tol, "vortexl: Singular condition, |r1xr2|^2 is close enought of the core"  
+    # assert r1xr2_norm_square > tol, "vortexl: Singular condition, |r1xr2|^2 is close enought of the core"  
     
     # velocity
     K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
@@ -189,29 +208,36 @@ def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarr
     
     return aij, bij
 
-def influence_coefficients(Vinf:np.ndarray,aoa:float, l_inf:float, panels:np.ndarray, vcp:np.ndarray, normals:np.ndarray)->tuple:
+def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
     """_summary_
 
     Parameters
     ----------
     Vinf : np.ndarray
         _description_
-    aoa : float
-        _description_
     l_inf : float
         _description_
-    panels : np.ndarray
-        _description_
-    vcp : np.ndarray
-        _description_
-    normals : np.ndarray
-        _description_
+    mesh: dict
+        Dicionário com:
+            panels : np.ndarray
+                _description_
+            panels_span:np.ndarray
+                _description_
+            vcp : np.ndarray
+                _description_
+            normals : np.ndarray
+                _description_
 
     Returns
     -------
     tuple
         _description_
     """
+    
+    panels = mesh['panels']
+    vcp = mesh['vcp']
+    normals = mesh['normals']
+    panels_span = mesh['panels_span']
     
     npanels = panels.shape[0]
     
@@ -220,9 +246,10 @@ def influence_coefficients(Vinf:np.ndarray,aoa:float, l_inf:float, panels:np.nda
     RHS = np.zeros(npanels)
     for ki in range(npanels):
         p = vcp[ki, 2, :]
-        RHS[ki] = -Vinf*np.sin(aoa) @ normals[ki]
+        RHS[ki] = -Vinf @ normals[ki]
         for kj in range(npanels):
-            span = panels[kj, 3, 1] - panels[kj, 0, 1]
+            # span = panels[kj, 3, 1] - panels[kj, 0, 1]
+            span = panels_span[kj,0]
             
             # Defini points of the horseshoe vortex
             pa = vcp[kj, 1, :] + np.array([l_inf, -span/2, 0]) # point at infinite
