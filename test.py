@@ -15,10 +15,10 @@ geometry = np.column_stack([x_le, y, chord])
 nspan  = 20
 nchord = 10
 
-X, Y, Z, panels = vlm.meshPlanar(nspan, nchord, geometry)
+X, Y, Z, panels, panels_id, normals, area = vlm.meshPlanar(nspan, nchord, geometry)
 
 vcp = vlm.vortexAndControlPoint(panels)
-vlm.plot_mesh(X, Y, Z, vcp)
+vlm.plot_mesh(X, Y, Z, vcp, normals)
 
 
 # %% asa enflechada
