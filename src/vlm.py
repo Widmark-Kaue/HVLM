@@ -126,7 +126,7 @@ def vortexAndControlPoint(panels:np.ndarray):
     
     return vcp
 
-def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:float = 1e-3) -> np.ndarray:
+def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:float = 1e-6) -> np.ndarray:
     """_summary_
 
     Parameters
@@ -150,7 +150,7 @@ def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:flo
     # Distances vectors
     r1 = p - p1
     r2 = p - p2
-    r0 = p
+    r0 = p2 - p1
     
     # Unit vectos
     r1_norm = np.linalg.norm(r1)
@@ -166,10 +166,15 @@ def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:flo
     r1xr2 = np.cross(r1, r2)
     r1xr2_norm_square = np.linalg.norm(r1xr2)**2
     
-    # assert r1xr2_norm_square > tol, "vortexl: Singular condition, |r1xr2|^2 is close enought of the core"  
-    
+    distances = np.array([r1_norm, r2_norm, r1xr2_norm_square])
+    msg = ''
+    if np.any(distances < tol):
+        msg = 'vortexl: Singular condition'
+        print(msg)
+        K = 0
+    else:
+        K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
     # velocity
-    K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
     q12 = K*r1xr2
     
     return q12
@@ -218,7 +223,7 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
     l_inf : float
         _description_
     mesh: dict
-        Dicionário com:
+        Dictionare with:
             panels : np.ndarray
                 _description_
             panels_span:np.ndarray
@@ -233,7 +238,7 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
     tuple
         _description_
     """
-    
+
     panels = mesh['panels']
     vcp = mesh['vcp']
     normals = mesh['normals']
@@ -252,10 +257,15 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
             span = panels_span[kj,0]
             
             # Defini points of the horseshoe vortex
-            pa = vcp[kj, 1, :] + np.array([l_inf, -span/2, 0]) # point at infinite
+            pa = vcp[kj, 1, :] + np.array([0, -span/2, 0]) # point at infinite
+            
+            pa[0] = l_inf
+            
             pb = vcp[kj, 1, :] + np.array([0, -span/2, 0])
             pc = vcp[kj, 1, :] + np.array([0, +span/2, 0])
-            pd = vcp[kj, 1, :] + np.array([l_inf, +span/2, 0]) # point at infinite
+            pd = vcp[kj, 1, :] + np.array([0, +span/2, 0]) # point at infinite
+            
+            pd[0] = l_inf
             
             aij, bij = hshoe(p, pa, pb, pc, pd)
             a[ki, kj] = aij @ normals[ki]
