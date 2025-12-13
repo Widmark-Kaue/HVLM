@@ -1,8 +1,7 @@
 import numpy as np
-# from scipy.linalg import solve
 import matplotlib.pyplot as plt
 
-def plot_mesh(mesh:dict):
+def plot_mesh(mesh:dict,title:str = ''):
     
     X = mesh['X']
     Y = mesh['Y']
@@ -35,21 +34,65 @@ def plot_mesh(mesh:dict):
     ax.set_ylabel("y")
     ax.set_zlabel("z") # type: ignore
     ax.set_box_aspect([1, 1, 0.1]) # type: ignore
+    fig.suptitle(title)
     plt.axis('equal')
     plt.show(block = False)
 
-def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
-    # geometry: (N_stations, 3): [x_le, y, chord]
+def geometry(span:float, AR:float, sections:list=[], taper:float = 1, sweep:float = 0, twist:float = 0, symmetry:bool = True):
     
-    assert geometry.shape[1] == 3, "Geometry must have columns [x_le, y, chord]"
     
-    y_geo = geometry[:, 1]
+    S = span**2/AR
+    cmean = S/span
+    cr = 2*cmean/(1+taper)
+    ct = cr*taper
+    
+    if sections == []:
+        nsection = 2
+    else:
+        nsection = len(sections) + 1
+    if symmetry:
+        y = np.linspace(0, span/2, nsection)
+        chord = cr + 2*np.abs(y/span)*(ct - cr)
+    else:
+        y = np.linspace(-span/2, span/2, nsection)
+        chord = cr + np.abs(y/span)*(ct - cr)
+    
+    sweep = np.deg2rad(sweep)
+    twist = np.deg2rad(twist)
+    x_le = np.tan(sweep)*y
+    z_le = np.tan(twist)*y
+    geometry = dict(
+        leading_edge = np.column_stack([x_le, y, z_le]),
+        chord = chord,
+        camber = np.zeros_like(chord),
+        span = span,
+        AR = AR,
+        S = S,
+        cmean = cmean,
+        sections = sections,
+        sweep = np.rad2deg(sweep),
+        twist = np.rad2deg(twist),
+        symmetry = symmetry
+    )
+    
+    return geometry
+
+def meshPlanar(nspan:int, nchord:int, geometry:dict):
+    # leading_edge: (N_stations, 3): [x_le, y, z_le]
+    
+    leading_edge = geometry['leading_edge']
+    
+    
+    assert leading_edge.shape[1] == 3, "leading_edge must have columns [x_le, y, z_le]"
+    
+    y_geo = leading_edge[:, 1]
     # span = y_geo[-1] - y
     y = np.linspace(y_geo[0], y_geo[-1], nspan+1)
     
     # Interpolações
-    x_le = np.interp(y, y_geo, geometry[:,0])
-    chord  = np.interp(y, y_geo, geometry[:,2])
+    x_le = np.interp(y, y_geo, leading_edge[:,0])
+    z_le = np.interp(y, y_geo, leading_edge[:, 2])
+    chord  = np.interp(y, y_geo, geometry['chord'])
     
     # Malha (nchord+1, nspan+1)
     X = np.zeros((nchord+1, nspan+1))
@@ -61,7 +104,7 @@ def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
             eta = i / nchord   # 0 → 1
             X[i,j] = x_le[j] + chord[j] * eta
             Y[i,j] = y[j]
-            Z[i,j] = 0.0
+            Z[i,j] = z_le[j]
     
     # Painéis
     n_panels = nchord * nspan
@@ -288,11 +331,48 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict, symmetry:boo
     
     return a, b, RHS
 
-def coefficients(rho:float, Vinf:float, Gamma:np.ndarray, mesh:dict):
+
+def coefficients(Vinf:float, rho:float, Gamma:np.ndarray, wind:np.ndarray, mesh:dict):
     geometry = mesh['geometry']
-    span = geometry[-1, 1] - geometry[0, 1] 
+    panels_span = mesh['panels_span'].reshape(Gamma.shape)
+    
+    aux = 2 if geometry['symmetry'] else 1
+    
+    # Ref parameters
+    S = geometry['S']
+    c = geometry['cmean']
+    q = 0.5*rho*Vinf**2
+    
+    # Lift
+    L = rho*Vinf*Gamma*panels_span
+    L = np.sum(L)
+    CL = aux*L/(q*S*c)
+    
+    # Induced drag
+    D = -rho/2 * np.sum(Gamma*wind*panels_span)
+    CDi = aux*D/(q*S*c)
+    
+    return CL, CDi
 
-
+def run_polar(Vinf:float, rho:float, alpha:np.ndarray, mesh:dict):
+    
+    span = mesh['geometry']['span']
+    sy = mesh['geometry']['symmetry']
+    
+    alpha_rad = np.deg2rad(alpha)
+    CL = np.zeros(alpha.shape)
+    CDi = np.zeros(alpha.shape)
+    for i in range(len(alpha)):
+        aoa = alpha_rad[i]
+        V  = Vinf*np.array([np.cos(aoa), 0, np.sin(aoa)])
+        A, B, RHS = influence_coefficients(V,20*span, mesh, symmetry=sy)
+        Gamma = np.linalg.solve(A,RHS)
+        wind = B @ Gamma
+        
+        cl, cdi = coefficients(Vinf, rho, Gamma, wind, mesh)
+        CL[i] = cl
+        CDi[i] = cdi
+    return CL, CDi
 
 
 
