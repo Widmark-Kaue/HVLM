@@ -44,6 +44,7 @@ def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
     assert geometry.shape[1] == 3, "Geometry must have columns [x_le, y, chord]"
     
     y_geo = geometry[:, 1]
+    # span = y_geo[-1] - y
     y = np.linspace(y_geo[0], y_geo[-1], nspan+1)
     
     # Interpolações
@@ -84,9 +85,9 @@ def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
             panels[k,:,:] = np.array([P1, P2, P3, P4])
             
             # Normais
-            u = P2 - P1
-            v = P4 - P1          
-            normal = np.cross(u, v)
+            Ak = P3 - P1
+            Bk = P4 - P2          
+            normal = np.cross(Ak, Bk)
             area[k] = np.linalg.norm(normal)
             normal_unit = normal/area[k]
             normals[k, :] = normal_unit
@@ -100,7 +101,8 @@ def meshPlanar(nspan:int, nchord:int, geometry:np.ndarray):
         panels_id = panels_id,
         normals = normals,
         area = area,
-        vcp = vcp
+        vcp = vcp,
+        geometry = geometry
     )     
 
     return MESH
@@ -166,15 +168,17 @@ def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:flo
     r1xr2 = np.cross(r1, r2)
     r1xr2_norm_square = np.linalg.norm(r1xr2)**2
     
-    distances = np.array([r1_norm, r2_norm, r1xr2_norm_square])
-    msg = ''
-    if np.any(distances < tol):
-        msg = 'vortexl: Singular condition'
-        print(msg)
-        K = 0
-    else:
-        K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
-    # velocity
+    # distances = np.array([r1_norm, r2_norm, r1xr2_norm_square])
+    # msg = ''
+    # if np.any(distances < tol):
+    #     msg = 'vortexl: Singular condition'
+    #     print(msg)
+    #     K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
+    # else:
+    #     K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
+    
+    # induced velocity
+    K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
     q12 = K*r1xr2
     
     return q12
@@ -213,7 +217,7 @@ def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarr
     
     return aij, bij
 
-def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
+def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict, symmetry:bool = False)->tuple:
     """_summary_
 
     Parameters
@@ -256,7 +260,7 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
             # span = panels[kj, 3, 1] - panels[kj, 0, 1]
             span = panels_span[kj,0]
             
-            # Defini points of the horseshoe vortex
+            # Define points of the horseshoe vortex
             pa = vcp[kj, 1, :] + np.array([0, -span/2, 0]) # point at infinite
             
             pa[0] = l_inf
@@ -268,7 +272,32 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict)->tuple:
             pd[0] = l_inf
             
             aij, bij = hshoe(p, pa, pb, pc, pd)
+            
+            # Symmetry condition
+            if symmetry:
+                aux =np.array([1, -1, 1]) 
+                ps = aux*p
+                aij_sy, bij_sy = hshoe(ps, pa, pb, pc, pd)
+                aij = aij + aux*aij_sy
+                bij = bij + aux*bij_sy
+                
+            
+            
             a[ki, kj] = aij @ normals[ki]
             b[ki, kj] = bij @ normals[ki]
     
     return a, b, RHS
+
+def coefficients(rho:float, Vinf:float, Gamma:np.ndarray, mesh:dict):
+    geometry = mesh['geometry']
+    span = geometry[-1, 1] - geometry[0, 1] 
+
+
+
+
+
+
+
+
+    
+    
