@@ -20,7 +20,7 @@ path = Path('data', 'avlCases')
 path.mkdir(exist_ok=True)
 
 # Geometric parameters
-b = 5           #span
+b = 1           #span
 AR = 8 
 taper = 0.6
 sweep = np.deg2rad(10)
@@ -36,7 +36,7 @@ nspan  = 5
 nchord = 3
 
 #%% Sweep case
-base_case = avl.Case(name='polar',velocity = 1)
+base_case = avl.Case(name='polar',velocity = 1, density = 1.225)
 alphas    =np.arange(0, 12)
 all_cases = avl.create_sweep_cases(base_case=base_case,
                                    parameters=[{'name': 'alpha',
