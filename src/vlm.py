@@ -40,7 +40,6 @@ def plot_mesh(mesh:dict,title:str = ''):
 
 def geometry(span:float, AR:float, sections:list=[], taper:float = 1, sweep:float = 0, twist:float = 0, symmetry:bool = True):
     
-    
     S = span**2/AR
     cmean = S/span
     cr = 2*cmean/(1+taper)
