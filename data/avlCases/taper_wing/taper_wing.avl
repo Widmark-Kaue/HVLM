@@ -6,7 +6,7 @@ taper_wing
 #iYsym iZsym Zsym
 0 0 0.0
 #Sref Cref Bref
-3.125 0.625 5
+0.125 0.125 1
 #Xref Yref Zref
 0 0 0
 0.0
@@ -19,12 +19,12 @@ YDUPLICATE
 0.0
 SECTION
 #Xle Yle Zle Chord Angle
-0 0 0 0.78125 0.0
+0 0 0 0.15625 0.0
 NACA  
 0012
 SECTION
 #Xle Yle Zle Chord Angle
-0 2.5 0 0.46875 0.0
+0 0.5 0 0.09375 0.0
 NACA  
 0012
 
