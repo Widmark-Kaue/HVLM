@@ -6,9 +6,11 @@ from avlwrapper import Configuration
 # AVL and Project Path
 ################################################################
 
-avlPath = Path('bin','avl352.exe').absolute()
+# avlPath = Path('bin','avl352.exe').absolute()
+avlPath = Path('bin','avl.exe').absolute()
 if not avlPath.exists():
-    avlPath = Path('..', 'bin', 'avl352.exe').absolute()
+    # avlPath = Path('..', 'bin', 'avl352.exe').absolute()
+    avlPath = Path('..', 'bin', 'avl.exe').absolute()
 
 PROJECT = avlPath.parent.parent
 
@@ -23,9 +25,10 @@ def config_file(PATH_AVL):
     config = ConfigParser()
 
     config['environment'] = {
-        'Executable': avl_path.absolute(),
+        'Executable': str(avl_path.absolute()),
         'PrintOutput': 'no',
         'GhostscriptExecutable': 'gs',
+        'loglevel': 'INFO'
     }
 
     config['output'] = {
