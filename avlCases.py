@@ -69,6 +69,7 @@ session = avl.Session(geometry=WING, cases=all_cases)
 session.show_geometry()
 session.export_run_files(path = Path('data', WING.name))
 results = session.run_all_cases()
+exportpolar(results, alphas, WING.name)
 
 # %% Wing with taper ratio
 root_section = avl.Section(
@@ -99,7 +100,9 @@ WING = avl.Aircraft(name = 'taper_wing',
 
 session = avl.Session(geometry=WING, cases=all_cases)
 session.show_geometry()
-# session.export_run_files(path = Path('data', WING.name))
-# results = session.run_all_cases()
+session.export_run_files(path = Path('data', WING.name))
+results = session.run_all_cases()
+exportpolar(results, alphas, WING.name)
+
 
 # %%
