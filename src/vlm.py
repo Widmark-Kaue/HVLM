@@ -138,6 +138,8 @@ def meshPlanar(nspan:int, nchord:int, geometry:dict):
     vcp = vortexAndControlPoint(panels)
     MESH = dict(
         X = X, Y = Y, Z = Z,
+        nspan = nspan,
+        nchord = nchord,
         panels = panels, 
         panels_span = panels_span,
         panels_id = panels_id,
@@ -259,7 +261,7 @@ def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarr
     
     return aij, bij
 
-def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict, symmetry:bool = False)->tuple:
+def influence_coefficients(mesh:dict,l_inf:float)->tuple:
     """_summary_
 
     Parameters
@@ -284,7 +286,7 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict, symmetry:boo
     tuple
         _description_
     """
-
+    symmetry = mesh['geometry']['symmetry']
     panels = mesh['panels']
     vcp = mesh['vcp']
     normals = mesh['normals']
@@ -292,12 +294,10 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict, symmetry:boo
     
     npanels = panels.shape[0]
     
-    a = np.zeros((npanels, npanels))
-    b = np.zeros((npanels, npanels))
-    RHS = np.zeros(npanels)
+    A = np.zeros((npanels, npanels))
+    B = np.zeros((npanels, npanels))
     for ki in range(npanels):
-        p = vcp[ki, 2, :]
-        RHS[ki] = -Vinf @ normals[ki]
+        p = vcp[ki, 2, :]       # point where the induced velocitys will be evaluate
         for kj in range(npanels):
             # span = panels[kj, 3, 1] - panels[kj, 0, 1]
             span = panels_span[kj,0]
@@ -325,17 +325,32 @@ def influence_coefficients(Vinf:np.ndarray, l_inf:float, mesh:dict, symmetry:boo
                 
             
             
-            a[ki, kj] = aij @ normals[ki]
-            b[ki, kj] = bij @ normals[ki]
+            A[ki, kj] = aij @ normals[ki]
+            B[ki, kj] = bij @ normals[ki]
     
-    return a, b, RHS
+    return A, B
 
+def RHS_matrix(Vinf:np.ndarray, normals:np.ndarray):
+    npanels = normals.shape[0]
+    RHS = np.zeros(npanels)
+    for k in range(npanels):
+        RHS[k] = -Vinf @ normals[k]  
+    
+    return RHS
 
 def coefficients(Vinf:float, rho:float, Gamma:np.ndarray, wind:np.ndarray, mesh:dict):
+    
+    nspan = mesh['nspan']
+    nchord = mesh['nchord']
     geometry = mesh['geometry']
-    panels_span = mesh['panels_span'].reshape(Gamma.shape)
+    # panels_span_reshape = panels_span.reshape(nchord, nspan).copy()
     
     aux = 2 if geometry['symmetry'] else 1
+    
+    # Lifting-surface convention
+    wind = wind.reshape(nchord, nspan) 
+    panels_span = mesh['panels_span'].reshape(nchord, nspan)
+    Gamma = Gamma.reshape(nchord, nspan).copy()
     
     # Ref parameters
     S = geometry['S']
@@ -343,36 +358,46 @@ def coefficients(Vinf:float, rho:float, Gamma:np.ndarray, wind:np.ndarray, mesh:
     q = 0.5*rho*Vinf**2
     
     # Lift
-    L = rho*Vinf*Gamma*panels_span
-    L = np.sum(L)
-    CL = aux*L/(q*S*c)
+    L = rho*Vinf*np.sum(Gamma*panels_span)
+    CL = aux*L/(q*S)
     
     # Induced drag
-    D = -rho/2 * np.sum(Gamma*wind*panels_span)
-    CDi = aux*D/(q*S*c)
+    D = -rho * np.sum(Gamma*wind*panels_span)
+    CDi = aux*D/(q*S)
     
     return CL, CDi
 
-def run_polar(Vinf:float, rho:float, alpha:np.ndarray, mesh:dict):
+def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225):
     
     span = mesh['geometry']['span']
-    sy = mesh['geometry']['symmetry']
+    normals = mesh['normals']
+    npan = normals.shape[0]
     
     alpha_rad = np.deg2rad(alpha)
     CL = np.zeros(alpha.shape)
     CDi = np.zeros(alpha.shape)
+    CDi2 = np.zeros(alpha.shape)
+    A, B = influence_coefficients(mesh,20*span)
     for i in range(len(alpha)):
         aoa = alpha_rad[i]
         V  = Vinf*np.array([np.cos(aoa), 0, np.sin(aoa)])
-        A, B, RHS = influence_coefficients(V,20*span, mesh, symmetry=sy)
+        RHS = RHS_matrix(V, normals)
         Gamma = np.linalg.solve(A,RHS)
+        
+        # Compute induced velocity by wake
         wind = B @ Gamma
         
+        # Corrected wind
+        angle = normals @ np.array([0, 0, 1]).reshape(3, 1)
+        angle = np.arccos(angle).reshape(wind.shape)
+        wind2 = wind*np.cos(aoa + angle)
+        
         cl, cdi = coefficients(Vinf, rho, Gamma, wind, mesh)
+        _,cdi2 = coefficients(Vinf, rho, Gamma, wind2, mesh)
         CL[i] = cl
         CDi[i] = cdi
-    return CL, CDi
-
+        CDi2[i] = cdi2
+    return CL, CDi, CDi2
 
 
 
