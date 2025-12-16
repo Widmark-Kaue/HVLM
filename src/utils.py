@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import numpy as np
+from pathlib import Path
 
 def set_aiaa_style(): # type: ignore
     """
@@ -63,3 +65,40 @@ def set_aiaa_style(): # type: ignore
         'mathtext.rm': 'serif',
 
     })
+
+def plot_polar(vlmData:np.ndarray, path_case:Path, savefig:bool = False):
+    #paths
+    path_images = Path('images')
+    case = path_case.parent.name
+    
+    # data
+    alpha = vlmData[:, 0]
+    CL = vlmData[:, 1]
+    CDi = vlmData[:, 2]
+    avlData = np.loadtxt(path_case)
+
+    plt.figure(figsize=(8, 3.5))
+    plt.subplot(1, 2, 1)
+    plt.plot(avlData[:,0], avlData[:,1], 'k-o', label = 'AVL')
+    plt.plot(alpha, CL, 'r--s', label = 'code')
+    # plt.yticks(avlData[:,1])
+    plt.xlabel(r'$\alpha$ [deg]')
+    plt.ylabel(r'$C_{L}$')
+    # plt.grid()
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(avlData[:,0], avlData[:,2], 'k-o', label = 'AVL')
+    plt.plot(alpha, CDi, 'r--s', label = 'code')
+    # plt.plot(alpha, CDi2, 'm--^', label = 'code 2')
+    # plt.yticks(avlData[:,1])
+    plt.xlabel(r'$\alpha$ [deg]')
+    plt.ylabel(r'$C_{D_i}$')
+    # plt.legend()
+
+    if savefig:
+        plt.tight_layout()
+        plt.savefig(path_images.joinpath(f'{case}.pdf'), dpi = 600, format = 'pdf')
+    plt.suptitle(case.upper())
+    plt.tight_layout()
+    plt.show(block = False)
