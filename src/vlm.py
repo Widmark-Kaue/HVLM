@@ -172,7 +172,7 @@ def vortexAndControlPoint(panels:np.ndarray):
     
     return vcp
 
-def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:float = 1e-6) -> np.ndarray:
+def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:float = 1e-10) -> np.ndarray:
     """_summary_
 
     Parameters
@@ -212,22 +212,22 @@ def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:flo
     r1xr2 = np.cross(r1, r2)
     r1xr2_norm_square = np.linalg.norm(r1xr2)**2
     
-    # distances = np.array([r1_norm, r2_norm, r1xr2_norm_square])
-    # msg = ''
-    # if np.any(distances < tol):
-    #     msg = 'vortexl: Singular condition'
-    #     print(msg)
-    #     K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
-    # else:
-    #     K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
+    distances = np.array([r1_norm, r2_norm, r1xr2_norm_square])
+    msg = ''
+    if np.any(distances < tol):
+        msg = 'vortexl: Singular condition'
+        # print(msg)
+        K = 0
+    else:
+        K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
     
     # induced velocity
-    K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
+    # K = Gamma/(4*np.pi)/r1xr2_norm_square *(r0 @ r1_unit - r0 @ r2_unit)
     q12 = K*r1xr2
     
     return q12
     
-def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarray, Gamma:float = 1, tol:float = 1e-3)-> tuple:
+def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarray, Gamma:float = 1, tol:float = 1e-10)-> tuple:
     """_summary_
 
     Parameters
@@ -376,7 +376,7 @@ def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225):
     alpha_rad = np.deg2rad(alpha)
     CL = np.zeros(alpha.shape)
     CDi = np.zeros(alpha.shape)
-    CDi2 = np.zeros(alpha.shape)
+    # CDi2 = np.zeros(alpha.shape)
     A, B = influence_coefficients(mesh,20*span)
     for i in range(len(alpha)):
         aoa = alpha_rad[i]
@@ -392,12 +392,13 @@ def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225):
         angle = np.arccos(angle).reshape(wind.shape)
         wind2 = wind*np.cos(aoa + angle)
         
-        cl, cdi = coefficients(Vinf, rho, Gamma, wind, mesh)
-        _,cdi2 = coefficients(Vinf, rho, Gamma, wind2, mesh)
+        # cl, cdi = coefficients(Vinf, rho, Gamma, wind, mesh)
+        cl,cdi = coefficients(Vinf, rho, Gamma, wind2, mesh)
         CL[i] = cl
         CDi[i] = cdi
-        CDi2[i] = cdi2
-    return CL, CDi, CDi2
+    
+    polar = np.column_stack([alpha, CL, CDi])
+    return polar
 
 
 
