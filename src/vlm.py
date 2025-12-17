@@ -109,7 +109,7 @@ def meshPlanar(nspan:int, nchord:int, geometry:dict):
     n_panels = nchord * nspan
     panels_id = np.arange(n_panels).reshape(nchord, nspan)
     panels = np.zeros((n_panels, 4, 3))
-    panels_span = np.zeros((n_panels, 1))
+    panels_span = np.zeros((n_panels, 3))
     normals = np.zeros((n_panels, 3))
     area = np.zeros((n_panels,1))
     
@@ -133,7 +133,7 @@ def meshPlanar(nspan:int, nchord:int, geometry:dict):
             area[k] = np.linalg.norm(normal)
             normal_unit = normal/area[k]
             normals[k, :] = normal_unit
-            panels_span[k] = P4[1] - P1[1] # talvez não seja o suficiente para asas enflechadas
+            panels_span[k] = P4 - P1 # talvez não seja o suficiente para asas enflechadas
             
     vcp = vortexAndControlPoint(panels)
     MESH = dict(
@@ -226,7 +226,50 @@ def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:flo
     q12 = K*r1xr2
     
     return q12
+
+def vortex2(p,p1,p2,Gamma = 1.0):
+    """
+    Induced velocity (u, v, w) at point (x,y,z)
+    due to a finite vortex segment from (x1,y1,z1) to (x2,y2,z2)
+    with circulation gama (per unit length).
+    """
+
+    PI = np.pi
+    RCUT = 1.0e-10
+    x, y, z = p
+    x1, y1, z1 = p1
+    x2, y2, z2 = p2
     
+
+    # R1 x R2
+    r1r2x = (y - y1)*(z - z2) - (z - z1)*(y - y2)
+    r1r2y = -((x - x1)*(z - z2) - (z - z1)*(x - x2))
+    r1r2z = (x - x1)*(y - y2) - (y - y1)*(x - x2)
+
+    # |R1 x R2|^2
+    square = r1r2x**2 + r1r2y**2 + r1r2z**2
+
+    # |R1| and |R2|
+    r1 = np.sqrt((x - x1)**2 + (y - y1)**2 + (z - z1)**2)
+    r2 = np.sqrt((x - x2)**2 + (y - y2)**2 + (z - z2)**2)
+
+    # Cutoff (same logic as GOTO 1)
+    if (r1 < RCUT) or (r2 < RCUT) or (square < RCUT):
+        return np.zeros(3)
+
+    # R0 · R1 and R0 · R2
+    r0r1 = (x2 - x1)*(x - x1) + (y2 - y1)*(y - y1) + (z2 - z1)*(z - z1)
+    r0r2 = (x2 - x1)*(x - x2) + (y2 - y1)*(y - y2) + (z2 - z1)*(z - z2)
+
+    coef = Gamma / (4.0 * PI * square) * (r0r1 / r1 - r0r2 / r2)
+
+    u = r1r2x * coef
+    v = r1r2y * coef
+    w = r1r2z * coef
+    q = np.array([u, v, w])
+
+    return q
+       
 def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarray, Gamma:float = 1, tol:float = 1e-10)-> tuple:
     """_summary_
 
@@ -255,6 +298,10 @@ def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarr
     iv1 = vortexl(p, pa, pb, Gamma = Gamma, tol=tol)
     iv2 = vortexl(p, pb, pc, Gamma = Gamma, tol=tol)
     iv3 = vortexl(p, pc, pd, Gamma = Gamma, tol=tol)
+    
+    # iv1 = vortex2(p, pa, pb, Gamma)
+    # iv2 = vortex2(p, pb, pc, Gamma)
+    # iv3 = vortex2(p, pc, pd, Gamma)
     
     aij = iv1+iv2+iv3
     bij = iv1+iv3       # induced velocity by wake
@@ -300,7 +347,7 @@ def influence_coefficients(mesh:dict,l_inf:float)->tuple:
         p = vcp[ki, 2, :]       # point where the induced velocitys will be evaluate
         for kj in range(npanels):
             # span = panels[kj, 3, 1] - panels[kj, 0, 1]
-            span = panels_span[kj,0]
+            span = panels_span[kj,1]
             
             # Define points of the horseshoe vortex
             pa = vcp[kj, 1, :] + np.array([0, -span/2, 0]) # point at infinite
@@ -338,31 +385,53 @@ def RHS_matrix(Vinf:np.ndarray, normals:np.ndarray):
     
     return RHS
 
-def coefficients(Vinf:float, rho:float, Gamma:np.ndarray, wind:np.ndarray, mesh:dict):
+def coefficients(V:np.ndarray, rho:float, Gamma:np.ndarray, wind:np.ndarray, mesh:dict):
     
+    # Unit vectors
+    ex = np.array([1, 0, 0])
+    ey = np.array([0, 1, 0])
+    ez = np.array([0, 0, 1])
+    
+    # Geometry and mesh parameters
     nspan = mesh['nspan']
     nchord = mesh['nchord']
     geometry = mesh['geometry']
-    # panels_span_reshape = panels_span.reshape(nchord, nspan).copy()
+    panels_span = mesh['panels_span']
+    normals = mesh['normals']
     
     aux = 2 if geometry['symmetry'] else 1
     
-    # Lifting-surface convention
-    wind = wind.reshape(nchord, nspan) 
-    panels_span = mesh['panels_span'].reshape(nchord, nspan)
-    Gamma = Gamma.reshape(nchord, nspan).copy()
+    
+    # # Lifting-surface convention
+    # wind = wind.reshape(nchord, nspan) 
+    # Gamma = Gamma.reshape(nchord, nspan).copy()
     
     # Ref parameters
+    Vinf = np.linalg.norm(V)
+    Vunit = V.reshape(1, 3)/Vinf
+    aoa = np.arccos(V@ex /Vinf)
     S = geometry['S']
     c = geometry['cmean']
     q = 0.5*rho*Vinf**2
     
-    # Lift
-    L = rho*Vinf*np.sum(Gamma*panels_span)
+    # Correction panels_span
+    deltaS = panels_span  - (panels_span @ Vunit.copy().reshape(3, 1))*Vunit.repeat(panels_span.shape[0], axis=0) 
+    deltay = np.linalg.norm(deltaS,axis=1)
+    # panels_span_proj = panels_span @ ey.reshape(3, 1)
+    # panels_span_proj = panels_span_proj.reshape(Gamma.shape)
+    
+    # Correction of donwash velocity
+    angle = normals @ ez.reshape(3, 1)
+    angle = np.arccos(angle).reshape(wind.shape)
+    wind = wind*np.cos(aoa + angle)
+    wind = wind.reshape(Gamma.shape)
+    
+    #### Lift
+    L = rho*Vinf*np.sum(Gamma*deltay)
     CL = aux*L/(q*S)
     
-    # Induced drag
-    D = -rho * np.sum(Gamma*wind*panels_span)
+    ### Induced drag
+    D = -rho * np.sum(Gamma*wind*deltay)
     CDi = aux*D/(q*S)
     
     return CL, CDi
@@ -382,18 +451,15 @@ def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225):
         aoa = alpha_rad[i]
         V  = Vinf*np.array([np.cos(aoa), 0, np.sin(aoa)])
         RHS = RHS_matrix(V, normals)
+        
+        # Compute circulation
         Gamma = np.linalg.solve(A,RHS)
         
         # Compute induced velocity by wake
         wind = B @ Gamma
         
-        # Corrected wind
-        angle = normals @ np.array([0, 0, 1]).reshape(3, 1)
-        angle = np.arccos(angle).reshape(wind.shape)
-        wind2 = wind*np.cos(aoa + angle)
-        
         # cl, cdi = coefficients(Vinf, rho, Gamma, wind, mesh)
-        cl,cdi = coefficients(Vinf, rho, Gamma, wind2, mesh)
+        cl,cdi = coefficients(V, rho, Gamma, wind, mesh)
         CL[i] = cl
         CDi[i] = cdi
     
