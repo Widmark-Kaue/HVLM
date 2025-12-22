@@ -1,6 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+#%% Global vectors
+ex = np.array([1, 0, 0])
+ey = np.array([0, 1, 0])
+ez = np.array([0, 0, 1])
+
+#%% functions
+
 def plot_mesh(mesh:dict,title:str = ''):
     
     X = mesh['X']
@@ -135,7 +142,7 @@ def meshPlanar(nspan:int, nchord:int, geometry:dict):
             normals[k, :] = normal_unit
             panels_span[k] = P4 - P1 # talvez não seja o suficiente para asas enflechadas
             
-    vcp = vortexAndControlPoint(panels)
+    vcp, hshoe = vortexAndControlPoint(panels, panels_span=panels_span)
     MESH = dict(
         X = X, Y = Y, Z = Z,
         nspan = nspan,
@@ -146,18 +153,36 @@ def meshPlanar(nspan:int, nchord:int, geometry:dict):
         normals = normals,
         area = area,
         vcp = vcp,
+        horseshoe = hshoe,
         geometry = geometry
     )     
 
     return MESH
 
-def vortexAndControlPoint(panels:np.ndarray):
-    
+def vortexAndControlPoint(panels:np.ndarray, panels_span:np.ndarray):
+    """_summary_
+        pb -- pc
+        |     |
+    Parameters
+    ----------
+    panels : np.ndarray
+        _description_
+    panels_span : np.ndarray
+        _description_
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     npanels = panels.shape[0]
     
     vcp = np.zeros((npanels, 3, 3)) # (panel x [center, quarter chord, three quarter chord])
-    
+    horseshoe = np.zeros((npanels, 2, 3)) # panels x [pb, pc] 
     for k in range(npanels):
+        span= panels_span[k,1]
+        
+        # 
         center_point = np.mean(panels[k, :,:],axis=0)
         quarter_point = center_point.copy()
         three_quarter_point = center_point.copy()
@@ -168,9 +193,16 @@ def vortexAndControlPoint(panels:np.ndarray):
         three_quarter_point[0] = center_point[0] + half_chord/2
         vcp[k, 0, :] = center_point 
         vcp[k, 1, :] = quarter_point
-        vcp[k, 2, :] = three_quarter_point 
-    
-    return vcp
+        vcp[k, 2, :] = three_quarter_point
+        
+        # Define points of the horseshoe vortex
+        pb = vcp[k, 1, :] + np.array([0, -span/2, 0])
+        pc = vcp[k, 1, :] + np.array([0, +span/2, 0])
+        
+        horseshoe[k, 0, :] = pb
+        horseshoe[k, 1, :] = pc
+        
+    return vcp, horseshoe
 
 def vortexl(p:np.ndarray, p1:np.ndarray, p2:np.ndarray, Gamma:float = 1, tol:float = 1e-10) -> np.ndarray:
     """_summary_
@@ -269,6 +301,21 @@ def vortex2(p,p1,p2,Gamma = 1.0):
     q = np.array([u, v, w])
 
     return q
+
+def hshoeDrela(p, pa, pb, **args):
+    a = p - pa
+    b = p - pb
+    anorm = np.linalg.norm(a)
+    bnorm = np.linalg.norm(b)
+    aXb = np.cross(a, b)
+    aXx = np.cross(a, ex)
+    bXx = np.cross(b, ex)
+    bounded_vortex = aXb/(anorm*bnorm + a@b)*(1/anorm + 1/bnorm)
+    a_point_trailing_leg = aXx/(anorm - a@ex) * 1/anorm
+    b_point_trailing_leg = bXx/(bnorm - b@ex) * 1/bnorm
+    Vi = 1/(4*np.pi)*(bounded_vortex+a_point_trailing_leg - b_point_trailing_leg)
+    Vwake = 1/(4*np.pi)*(a_point_trailing_leg - b_point_trailing_leg)
+    return Vi, Vwake
        
 def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarray, Gamma:float = 1, tol:float = 1e-10)-> tuple:
     """_summary_
@@ -295,6 +342,7 @@ def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarr
     tuple
         _description_
     """
+    
     iv1 = vortexl(p, pa, pb, Gamma = Gamma, tol=tol)
     iv2 = vortexl(p, pb, pc, Gamma = Gamma, tol=tol)
     iv3 = vortexl(p, pc, pd, Gamma = Gamma, tol=tol)
@@ -302,13 +350,14 @@ def hshoe(p:np.ndarray, pa:np.ndarray, pb:np.ndarray, pc:np.ndarray, pd:np.ndarr
     # iv1 = vortex2(p, pa, pb, Gamma)
     # iv2 = vortex2(p, pb, pc, Gamma)
     # iv3 = vortex2(p, pc, pd, Gamma)
-    
     aij = iv1+iv2+iv3
     bij = iv1+iv3       # induced velocity by wake
+        
     
     return aij, bij
 
-def influence_coefficients(mesh:dict,l_inf:float)->tuple:
+
+def influence_coefficients_hshoe(mesh:dict,l_inf:float, ref:str = 'Katz')->tuple:
     """_summary_
 
     Parameters
@@ -337,36 +386,43 @@ def influence_coefficients(mesh:dict,l_inf:float)->tuple:
     panels = mesh['panels']
     vcp = mesh['vcp']
     normals = mesh['normals']
-    panels_span = mesh['panels_span']
-    
+    horseshoePoints = mesh['horseshoe']
+        
     npanels = panels.shape[0]
+    
+    if ref.lower() == 'katz':
+        funcH = lambda p, pa, pb, pc, pd: hshoe(p, pa, pb, pc, pd)
+    else:
+        funcH = lambda p, pa, pb, pc, pd: hshoeDrela(p, pb, pc)         
+    
     
     A = np.zeros((npanels, npanels))
     B = np.zeros((npanels, npanels))
     for ki in range(npanels):
         p = vcp[ki, 2, :]       # point where the induced velocitys will be evaluate
         for kj in range(npanels):
-            # span = panels[kj, 3, 1] - panels[kj, 0, 1]
-            span = panels_span[kj,1]
+            pb = horseshoePoints[kj, 0]
+            pc = horseshoePoints[kj, 1]
             
-            # Define points of the horseshoe vortex
-            pa = vcp[kj, 1, :] + np.array([0, -span/2, 0]) # point at infinite
-            
+            pa = pb.copy()
+            pd = pc.copy()
             pa[0] = l_inf
-            
-            pb = vcp[kj, 1, :] + np.array([0, -span/2, 0])
-            pc = vcp[kj, 1, :] + np.array([0, +span/2, 0])
-            pd = vcp[kj, 1, :] + np.array([0, +span/2, 0]) # point at infinite
-            
             pd[0] = l_inf
             
-            aij, bij = hshoe(p, pa, pb, pc, pd)
-            
+            aij, bij = funcH(p, pa, pb, pc, pd)     
+            # if method == 1:
+            #     aij, bij = hshoe(p, pa, pb, pc, pd)
+            # else:
+            #     aij, bij = hshoeDrela(p, pb, pc)
             # Symmetry condition
             if symmetry:
                 aux =np.array([1, -1, 1]) 
                 ps = aux*p
-                aij_sy, bij_sy = hshoe(ps, pa, pb, pc, pd)
+                aij_sy, bij_sy = funcH(ps, pa, pb, pc, pd)     
+                # if method ==1:
+                #     aij_sy, bij_sy = hshoe(ps, pa, pb, pc, pd)
+                # else:
+                #     aij_sy, bij_sy = hshoeDrela(ps, pb, pc)
                 aij = aij + aux*aij_sy
                 bij = bij + aux*bij_sy
                 
@@ -386,11 +442,6 @@ def RHS_matrix(Vinf:np.ndarray, normals:np.ndarray):
     return RHS
 
 def coefficients(V:np.ndarray, rho:float, Gamma:np.ndarray, wind:np.ndarray, mesh:dict):
-    
-    # Unit vectors
-    ex = np.array([1, 0, 0])
-    ey = np.array([0, 1, 0])
-    ez = np.array([0, 0, 1])
     
     # Geometry and mesh parameters
     nspan = mesh['nspan']
@@ -436,7 +487,7 @@ def coefficients(V:np.ndarray, rho:float, Gamma:np.ndarray, wind:np.ndarray, mes
     
     return CL, CDi
 
-def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225):
+def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225, ref:str = 'Katz'):
     
     span = mesh['geometry']['span']
     normals = mesh['normals']
@@ -446,7 +497,7 @@ def run_polar(Vinf:float, alpha:np.ndarray, mesh:dict, rho:float = 1.225):
     CL = np.zeros(alpha.shape)
     CDi = np.zeros(alpha.shape)
     # CDi2 = np.zeros(alpha.shape)
-    A, B = influence_coefficients(mesh,20*span)
+    A, B = influence_coefficients_hshoe(mesh,20*span, ref = ref)
     for i in range(len(alpha)):
         aoa = alpha_rad[i]
         V  = Vinf*np.array([np.cos(aoa), 0, np.sin(aoa)])
