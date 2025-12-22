@@ -1,16 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
+from scipy.interpolate import interp1d
 
 @dataclass
 class Geometry:
     span:float
     AR:float
-    sections:list = field(default_factory = lambda: [])
+    sections:list[str]
     taper:float = 1
     sweep:float = 0
     twist:float = 0 
     symmetry:bool = True
+    camber_points:int = 50
     S:float = field(init=False, default=1.0)
     leading_edge:np.ndarray = field(init = False, repr = False, default_factory=lambda: np.empty(1))
     chord:np.ndarray = field(init = False, repr = False, default_factory=lambda: np.empty(1))
@@ -32,10 +34,10 @@ class Geometry:
         cr = 2*cmean/(1+taper)
         ct = cr*taper
         
-        if sections == []:
-            nsection = 2
-        else:
-            nsection = len(sections) + 1
+        # number of sections
+        nsection = len(sections)
+                
+        # define spanwise and chord distribution  
         if symmetry:
             y = np.linspace(0, span/2, nsection)
             chord = cr + 2*np.abs(y/span)*(ct - cr)
@@ -43,6 +45,15 @@ class Geometry:
             y = np.linspace(-span/2, span/2, nsection)
             chord = cr + np.abs(y/span)*(ct - cr)
         
+        # Evaluate camber
+        camber = np.zeros((self.camber_points, nsection))
+        for i, section in enumerate(sections):
+            if 'naca' in section.lower():
+                number = section.split(' ')[-1]
+                camber[:, i] = self.NacaAirfoil(number)
+        
+                
+        # Modify x and z leading edge coord accord with sweep and twist
         sweep = np.deg2rad(sweep)
         twist = np.deg2rad(twist)
         x_le = np.tan(sweep)*y
@@ -51,9 +62,25 @@ class Geometry:
         # add properties
         self.leading_edge = np.column_stack([x_le, y, z_le])
         self.chord = chord
-        self.camber = np.zeros_like(chord)
+        self.camber = camber
         self.cmean = cmean
         self.S = S
+    
+    def NacaAirfoil(self, number:str, spacing:str = 'Uniform'):
+        m = float(number[0])/100
+        p = float(number[1])/10
+        
+        x = np.linspace(0, 1, self.camber_points)    
+        y = np.zeros_like(x)
+        pos1 = x < p
+        pos2 = (x >= p) * (x < 1)
+        x1 = x[pos1]
+        x2 = x[pos2] 
+        
+        if p != 0:
+            y[pos1] = m/(p**2)   * (2*p*x1 - x1**2)
+        y[pos2] = m/(1-p)**2 * (1 - 2*p + 2*p*x2 - x2**2) 
+        return y
 
 @dataclass
 class Wing(Geometry):
@@ -105,17 +132,24 @@ class Wing(Geometry):
     def mesh(self, nspan:int, nchord:int):
         leading_edge = self.leading_edge
         chord = self.chord
-    
+        camber = self.camber
+        
         assert leading_edge.shape[1] == 3, "leading_edge must have columns [x_le, y, z_le]"
         
+        # Geometry points
         y_geo = leading_edge[:, 1]
-        # span = y_geo[-1] - y
+        x_c_geo = np.linspace(0, 1, self.camber_points)
+
+        # Mesh points
         y = np.linspace(y_geo[0], y_geo[-1], nspan+1)
+        x_c = np.linspace(0, 1, nchord+1)
         
-        # Interpolações
+        # Interpolations
         x_le = np.interp(y, y_geo, leading_edge[:,0])
         z_le = np.interp(y, y_geo, leading_edge[:, 2])
         chord  = np.interp(y, y_geo, chord)
+        camber_fy = interp1d(y_geo, camber, axis=1)(y)
+        camber_fx = interp1d(x_c_geo, camber_fy, axis=0)(x_c)
         
         # Malha (nchord+1, nspan+1)
         X = np.zeros((nchord+1, nspan+1))
@@ -127,7 +161,7 @@ class Wing(Geometry):
                 eta = i / nchord   # 0 → 1
                 X[i,j] = x_le[j] + chord[j] * eta
                 Y[i,j] = y[j]
-                Z[i,j] = z_le[j]
+                Z[i,j] = z_le[j] + camber_fx[i, j]*chord[j]
         
         # Painéis
         n_panels = nchord * nspan
