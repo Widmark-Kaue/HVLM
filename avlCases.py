@@ -171,3 +171,35 @@ session.show_geometry()
 session.export_run_files(path = path / WING.name)
 results = session.run_all_cases()
 exportpolar(results, alphas, path / WING.name / 'polar.dat')
+#%% Camber wing
+root_section = avl.Section(
+    leading_edge_point=avl.Point(0, 0, 0),
+    chord = cmean,
+    airfoil=avl.NacaAirfoil('2412')
+    )
+tip_section = avl.Section(
+    leading_edge_point=avl.Point(0, b/2, 0),
+    chord = cmean,
+    airfoil=avl.NacaAirfoil('2412')
+)
+
+wing = avl.Surface(name='wing',
+                   n_chordwise=nchord,
+                   chord_spacing=avl.Spacing.equal,
+                   n_spanwise=nspan,
+                   span_spacing=avl.Spacing.equal,
+                   y_duplicate=0.0,
+                   sections=[root_section, tip_section])
+
+WING = avl.Aircraft(name = 'camber_wing', 
+             reference_area=S,
+             reference_chord=cmean,
+             reference_span=b,
+             reference_point=avl.Point(0,0,0),
+             surfaces=[wing])
+
+session = avl.Session(geometry=WING, cases=all_cases)
+session.show_geometry()
+session.export_run_files(path = path / WING.name)
+results = session.run_all_cases()
+exportpolar(results, alphas, path / WING.name / 'polar.dat')
