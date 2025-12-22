@@ -47,7 +47,7 @@ case = 'rectangular_wing'
 geo_rec = vlm.geometry(span, AR)
 mesh_rec = vlm.meshPlanar(nspan, nchord, geo_rec)
 vlm.plot_mesh(mesh_rec, 'Rectangular Wing')
-vlmData = vlm.run_polar(Vinf=Vinf, alpha=alpha, mesh=mesh_rec)
+vlmData = vlm.run_polar(Vinf=Vinf, alpha=alpha, mesh=mesh_rec, ref = 'drela')
 plot_polar(vlmData=vlmData, path_case=path.joinpath(case, 'polar.dat'), savefig=savefig)
 
 #%% Wing with taper ratio
