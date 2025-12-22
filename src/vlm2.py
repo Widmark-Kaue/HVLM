@@ -1,6 +1,4 @@
-from dataclasses import dataclass, field
-from src.wing import Wing, plt, np
-
+from src.wing import *
 
 @dataclass
 class VLM:

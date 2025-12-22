@@ -1,5 +1,4 @@
-from src.wing import Wing, plt, np
-from src.vlm2 import VLM
+from src.vlm2 import np, plt, Wing, VLM
 from src.utils import set_aiaa_style, plot_polar, Path
 
 set_aiaa_style()

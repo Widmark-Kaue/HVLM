@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
-from typing import Iterable
 
 @dataclass
 class Geometry:
