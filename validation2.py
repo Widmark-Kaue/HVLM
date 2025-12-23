@@ -4,7 +4,7 @@ from src.utils import set_aiaa_style, plot_polar, Path
 set_aiaa_style()
 # General parameters
 path = Path('data', 'avlCases')
-savefig = True
+savefig = False
 # Simulation parameters
 Vinf = 1
 alpha = np.arange(0, 12, 1)
@@ -45,7 +45,7 @@ plt.close('all')
 wing = Wing(span=span, AR = AR, sections=sections, sweep=sweep, name = 'sweep_wing')
 wing.mesh(nspan=nspan, nchord=nchord)
 wing.plot_mesh(title=True)
-polar = wing_sim.run_polar(Vinf=Vinf, alpha=alpha)
+polar = wing_sim.run_polar(Vinf=Vinf, alpha=alpha, ref='drela')
 plot_polar(polar, path_case=path.joinpath(wing.name, 'polar.dat'), 
            savefig=savefig)
 
@@ -55,6 +55,7 @@ plt.close('all')
 wing = Wing(span=span, AR = AR, sections=sections, twist=twist, name = 'twist_wing')
 wing.mesh(nspan=nspan, nchord=nchord)
 wing.plot_mesh(title=True)
+polar = wing_sim.run_polar(Vinf=Vinf, alpha=alpha, ref='drela')
 plot_polar(polar, path_case=path.joinpath(wing.name, 'polar.dat'), 
            savefig=savefig)
 
