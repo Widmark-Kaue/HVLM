@@ -106,26 +106,37 @@ class Wing(Geometry):
         horseshoe = np.zeros((npanels, 2, 3)) # panels x [pb, pc] 
         for k in range(npanels):
             span= panels_span[k,1]
+            P1 = panels[k,0]
+            P2 = panels[k,1]
+            P3 = panels[k,2]
+            P4 = panels[k,3]
+            Lem = 0.5*(P1+P4)
+            Tem = 0.5*(P2+P3)
             
-            # 
+            # Panel middle points
             center_point = np.mean(panels[k, :,:],axis=0)
-            quarter_point = center_point.copy()
-            three_quarter_point = center_point.copy()
+            quarter_point = Lem + 0.25*(Tem - Lem)
+            three_quarter_point = Lem + 0.75*(Tem - Lem)
+            # center_point = np.mean(panels[k, :,:],axis=0)
+            # quarter_point = center_point.copy()
+            # three_quarter_point = center_point.copy()
             
-            half_chord = center_point[0] - panels[k,0,0] # final - inicial
+            # half_chord = center_point[0] - panels[k,0,0] # final - inicial
             
-            quarter_point[0] = center_point[0] - half_chord/2
-            three_quarter_point[0] = center_point[0] + half_chord/2
+            # quarter_point[0] = center_point[0] - half_chord/2
+            # three_quarter_point[0] = center_point[0] + half_chord/2
             vcp[k, 0, :] = center_point 
             vcp[k, 1, :] = quarter_point
             vcp[k, 2, :] = three_quarter_point
             
             # Define points of the horseshoe vortex
-            pb = vcp[k, 1, :] + np.array([0, -span/2, 0])
-            pc = vcp[k, 1, :] + np.array([0, +span/2, 0])
+            # pb = vcp[k, 1, :] + np.array([0, -span/2, 0])
+            # pc = vcp[k, 1, :] + np.array([0, +span/2, 0])
+            pa = P1 + 0.25*(P2 - P1)
+            pb = P4 + 0.25*(P3 - P4)
             
-            horseshoe[k, 0, :] = pb
-            horseshoe[k, 1, :] = pc
+            horseshoe[k, 0, :] = pa
+            horseshoe[k, 1, :] = pb
             
         return vcp, horseshoe
     
