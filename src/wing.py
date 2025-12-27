@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass, field
 from scipy.interpolate import interp1d
+from pathlib import Path
+
 
 @dataclass
 class Geometry:
@@ -219,7 +221,11 @@ class Wing(Geometry):
         self.vcp = vcp
         self.horseshoe = hshoe
     
-    def plot_mesh(self, title:bool = False):
+    def plot_mesh(self, title:bool = False, savefig:bool = False):
+        #%
+        path_images = Path('images')
+        case = self.name
+        
         X = self.X
         Y = self.Y
         Z = self.Z
@@ -228,7 +234,7 @@ class Wing(Geometry):
         vcp = self.vcp
         
         
-        fig = plt.figure()
+        fig = plt.figure(figsize=(6, 4))
         ax = fig.add_subplot(111, projection='3d')
 
         scale = 0.05*np.max(X)
@@ -236,6 +242,12 @@ class Wing(Geometry):
             ax.plot(X[i,:], Y[i,:], Z[i,:], 'k-')
         for j in range(X.shape[1]):
             ax.plot(X[:,j], Y[:,j], Z[:,j], 'k-')
+        
+        if self.symmetry:
+            for i in range(X.shape[0]):
+                ax.plot(X[i,:], -Y[i,:], Z[i,:], 'k-')
+            for j in range(X.shape[1]):
+                ax.plot(X[:,j], -Y[:,j], Z[:,j], 'k-')
             
         for k in range(vcp.shape[0]):
             nx, ny, nz = normals[k]
@@ -252,7 +264,10 @@ class Wing(Geometry):
         ax.set_ylabel("y")
         ax.set_zlabel("z") # type: ignore
         ax.set_box_aspect([1, 1, 0.1]) # type: ignore
-        fig.suptitle(titleName)
         plt.axis('equal')
+        plt.tight_layout()
+        if savefig:
+            plt.savefig(path_images.joinpath(f'{case}3d.pdf'), dpi = 600, format = 'pdf')
+        fig.suptitle(titleName)
         plt.show(block = False)
         
