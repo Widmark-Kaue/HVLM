@@ -4,6 +4,8 @@ from src.wing import *
 class VLM:
     wing: Wing
     rho:float = 1.225
+    V:np.ndarray = field(init=True, repr=True, default_factory=lambda:np.zeros(3))
+    
     
     # Vortex lattice parameters
     Gamma:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1))
@@ -11,17 +13,11 @@ class VLM:
     A:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1))
     B:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1))
     RHS:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1))
-    V:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1)) 
     Force:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1)) 
     polar:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.empty(1)) 
     CL:float = field(init=False, default=0)
     CDi:float = field(init=False, default=0)
     
-    
-    # Global unit vectors
-    ex:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.array([1, 0, 0]))
-    ey:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.array([0, 1, 0]))
-    ez:np.ndarray = field(init=False, repr=False, default_factory=lambda:np.array([0, 0, 1]))
     
     # tolerance to induced velocity methods
     tol:float = 1e-10
@@ -29,7 +25,18 @@ class VLM:
     #################################################################
     # Properties
     #################################################################
-
+    @property
+    def ex(self): # Global unit vectors x
+        return np.array([1, 0, 0])
+    
+    @property
+    def ey(self): # Global unit vectors y
+        return np.array([0, 1, 0])
+    
+    @property
+    def ez(self): # Global unit vectors z
+        return np.array([0, 0, 1])
+    
     @property
     def Vinf(self):
         return np.linalg.norm(self.V)
@@ -43,13 +50,17 @@ class VLM:
           return np.arctan(-self.V[1]/np.sqrt(self.V[0]**2 + self.V[2]**2))
     @property
     def rotation_matrix(self):
-        cos = np.cos(self.alpha)
-        sin = np.sin(self.alpha)
+        cosAlpha = np.cos(self.alpha)
+        sinAlpha = np.sin(self.alpha)
         
-        T = np.array([[cos, 0, sin  ],
-                      [0,   1,  0   ],
-                      [-sin, 0, cos ]])
-        return T
+        cosBeta = np.cos(self.beta)
+        sinBeta = np.sin(self.beta)
+        
+        T1 = np.array([[ cosAlpha, 0, sinAlpha],
+                       [        0, 1,       0 ],
+                       [-sinAlpha, 0, cosAlpha]])
+        
+        return T1
 
     #################################################################
     # automatic functions
@@ -173,12 +184,13 @@ class VLM:
             
             l = self.wing.horseshoe[k,1] - self.wing.horseshoe[k,0] # rb -ra 
             Vj, Vwj = self.induced_velocity(p, skip = k)
-            Vi = Vj + self.V                # \sum{r=1-N} Gamma * Vj(r) - Vinf
+            Vi = Vj + self.V                # \sum{r=1-N} Gamma * Vj(r) + Vinf
             Vwi = Vwj
             ViXl = np.cross(Vi, l)
             VwiXl = np.cross(Vwi, l)
             Force[k] = self.rho*ViXl*Gamma[k]
-            wind_normal[k] = Vwi[2]* (l@self.ey)
+            # wind_normal[k] = Vwi[2]* (l@self.ey)
+            wind_normal[k] = -np.linalg.norm(VwiXl)
                     
         Force = aux*Force/(q*S)
         self.Force = Force
@@ -199,11 +211,6 @@ class VLM:
         self.CDi = aux*D/(q*S)
         return self.CL, self.CDi
         
-    def treffz_plane_loads(self):
-        nspan = self.wing.nspan
-        nchord = self.wing.nchord
-        Gamma = self.Gamma.copy().reshape(nchord, nspan)
-        deltaPhi = np.sum(Gamma, axis = 0)
         
     #################################################################
     # Vortex Lattice matrix construction functions 
@@ -304,11 +311,11 @@ class VLM:
         for k in range(npanels):
             pa = self.wing.horseshoe[k, 0, :]    
             pb = self.wing.horseshoe[k, 1, :]
-            if k == skip:
-                _, vw = self.hshoeDrela(p, pa, pb)
-                Vi+=vw*self.Gamma[k]
-                Vw+=vw*self.Gamma[k]
-                continue
+            # if k == skip:
+            #     _, vw = self.hshoeDrela(p, pa, pb)
+            #     Vi+=vw*self.Gamma[k]
+            #     Vw+=vw*self.Gamma[k]
+            #     continue
             vi,vw = self.hshoeDrela(p, pa, pb)
             Vi+=vi*self.Gamma[k]
             Vw+=vw*self.Gamma[k]
@@ -438,9 +445,10 @@ class VLM:
         aXx = np.cross(a, ex)
         bXx = np.cross(b, ex)
         
-        bounded_vortex = aXb/(anorm*bnorm + a@b)*(1/anorm + 1/bnorm)
-        # if np.all(0.5*(pa+pb) == p):
-        #     bounded_vortex = np.zeros(3)
+        if np.all(np.abs(0.5*(pa+pb) - p) < self.tol):
+            bounded_vortex = np.zeros(3)
+        else:
+            bounded_vortex = aXb/(anorm*bnorm + a@b)*(1/anorm + 1/bnorm)
             
         a_point_trailing_leg = aXx/(anorm - a@ex) * 1/anorm
         b_point_trailing_leg = bXx/(bnorm - b@ex) * 1/bnorm
